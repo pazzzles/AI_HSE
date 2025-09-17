@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Random Review Sentiment Analyzer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f7f7f7;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 420px;
+            margin: 40px auto;
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            padding: 32px 24px 24px 24px;
+        }
+        h1 {
+            text-align: center;
+            font-size: 1.6em;
+            margin-bottom: 18px;
+            color: #333;
+        }
+        label {
+            font-weight: 500;
+            display: block;
+            margin-bottom: 6px;
+            color: #444;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 8px 10px;
+            margin-bottom: 16px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 1em;
+        }
+        button {
+            width: 100%;
+            background: #007bff;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 12px 0;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-bottom: 18px;
+        }
+        button:disabled {
+            background: #b3d1ff;
+            cursor: not-allowed;
+        }
+        .review-box {
+            background: #f2f2f2;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 18px;
+            min-height: 60px;
+            font-size: 1.08em;
+            color: #222;
+            word-break: break-word;
+        }
+        .sentiment-result {
+            text-align: center;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        .sentiment-label {
+            text-align: center;
+            font-size: 1.1em;
+            color: #555;
+            margin-bottom: 8px;
+        }
+        .error-message {
+            color: #d8000c;
+            background: #ffd2d2;
+            border-radius: 6px;
+            padding: 10px;
+            margin-bottom: 12px;
+            text-align: center;
+            font-size: 1em;
+        }
+        .loading {
+            text-align: center;
+            color: #007bff;
+            font-size: 1.1em;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Random Review Sentiment Analyzer</h1>
+        <label for="token-input">Hugging Face API Token (optional):</label>
+        <input type="text" id="token-input" placeholder="Enter your API token (optional)">
+        <button id="analyze-btn" disabled>Analyze Random Review</button>
+        <div id="loading" class="loading" style="display:none;">Loading reviews...</div>
+        <div id="error" class="error-message" style="display:none;"></div>
+        <div id="review" class="review-box"></div>
+        <div id="sentiment" class="sentiment-result"></div>
+        <div id="sentiment-label" class="sentiment-label"></div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
+const REVIEWS_TSV_URL = 'reviews_test.tsv';
+const analyzeBtn = document.getElementById('analyze-btn');
+const tokenInput = document.getElementById('token-input');
+const reviewBox = document.getElementById('review');
+const sentimentDiv = document.getElementById('sentiment');
+const sentimentLabelDiv = document.getElementById('sentiment-label');
+const errorDiv = document.getElementById('error');
+const loadingDiv = document.getElementById('loading');
+
+let reviews = [];
+
+function showLoading(msg) {
+    loadingDiv.textContent = msg;
+    loadingDiv.style.display = 'block';
+}
+
+function hideLoading() {
+    loadingDiv.style.display = 'none';
+}
+
+function showError(msg) {
+    errorDiv.textContent = msg;
+    errorDiv.style.display = 'block';
+}
+
+function hideError() {
+    errorDiv.style.display = 'none';
+}
+
+function clearSentiment() {
+    sentimentDiv.innerHTML = '';
+    sentimentLabelDiv.textContent = '';
+}
+
+function clearReview() {
+    reviewBox.textContent = '';
+}
+
+function setSentiment(type) {
+    if (type === 'positive') {
+        sentimentDiv.innerHTML = '<i class="fa-solid fa-thumbs-up" style="color:#28a745"></i>';
+        sentimentLabelDiv.textContent = 'Positive';
+    } else if (type === 'negative') {
+        sentimentDiv.innerHTML = '<i class="fa-solid fa-thumbs-down" style="color:#dc3545"></i>';
+        sentimentLabelDiv.textContent = 'Negative';
+    } else {
+        sentimentDiv.innerHTML = '<i class="fa-solid fa-question" style="color:#ffc107"></i>';
+        sentimentLabelDiv.textContent = 'Neutral';
+    }
+}
+
+function enableButton() {
+    analyzeBtn.disabled = false;
+}
+
+function disableButton() {
+    analyzeBtn.disabled = true;
+}
+
+function fetchReviews() {
+    showLoading('Loading reviews...');
+    fetch(REVIEWS_TSV_URL)
+        .then(response => {
+            if (!response.ok) throw new Error('Failed to fetch reviews_test.tsv');
+            return response.text();
+        })
+        .then(tsvText => {
+            Papa.parse(tsvText, {
+                header: true,
+                delimiter: '\t',
+                skipEmptyLines: true,
+                complete: function(results) {
+                    if (!results.data || !Array.isArray(results.data)) {
+                        throw new Error('TSV parsing failed.');
+                    }
+                    reviews = results.data
+                        .map(row => row['text'])
+                        .filter(text => typeof text === 'string' && text.trim().length > 0);
+                    if (reviews.length === 0) {
+                        throw new Error('No reviews found in TSV.');
+                    }
+                    hideLoading();
+                    enableButton();
+                },
+                error: function(err) {
+                    hideLoading();
+                    showError('Error parsing TSV: ' + err.message);
+                }
+            });
+        })
+        .catch(err => {
+            hideLoading();
+            showError('Error loading reviews: ' + err.message);
+        });
+}
+
+function getRandomReview() {
+    if (reviews.length === 0) return null;
+    const idx = Math.floor(Math.random() * reviews.length);
+    return reviews[idx];
+}
+function analyzeSentiment(reviewText, token) {
+    clearSentiment();
+    sentimentLabelDiv.textContent = '';
+    sentimentDiv.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="color:#007bff"></i>';
+    const url = 'https://api-inference.huggingface.co/models/siebert/sentiment-roberta-large-english';
+    const headers = {
+        'Content-Type': 'application/json'
+    };
+    if (token && token.trim().length > 0) {
+        headers['Authorization'] = 'Bearer ' + token.trim();
+    }
+    fetch(url, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify({ inputs: reviewText })
+    })
+    .then(async response => {
+        if (!response.ok) {
+            let errMsg = 'API error: ' + response.status;
+            try {
+                const errJson = await response.json();
+                if (errJson && errJson.error) {
+                    errMsg = errJson.error;
+                }
+            } catch {}
+            throw new Error(errMsg);
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (!Array.isArray(data)  !Array.isArray(data[0])  typeof data[0][0] !== 'object') {
+            setSentiment('neutral');
+            sentimentLabelDiv.textContent = 'Could not parse API response';
+            return;
+        }
+        const result = data[0][0];
+        const label = result.label;
+        const score = result.score;
+        if (label === 'POSITIVE' && score > 0.5) {
+            setSentiment('positive');
+        } else if (label === 'NEGATIVE' && score > 0.5) {
+            setSentiment('negative');
+        } else {
+            setSentiment('neutral');
+        }
+    })
+    .catch(err => {
+        setSentiment('neutral');
+        sentimentLabelDiv.textContent = '';
+        showError('Sentiment analysis failed: ' + err.message);
+    });
+}
+
+analyzeBtn.addEventListener('click', function() {
+    hideError();
+    clearSentiment();
+    clearReview();
+    if (reviews.length === 0) {
+        showError('No reviews loaded.');
+        return;
+    }
+    const reviewText = getRandomReview();
+    if (!reviewText) {
+        showError('Could not select a review.');
+        return;
+    }
+    reviewBox.textContent = reviewText;
+    const token = tokenInput.value;
+    analyzeSentiment(reviewText, token);
+});
+
+window.addEventListener('DOMContentLoaded', function() {
+    fetchReviews();
+});
