@@ -1,112 +1,38 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Random Review Sentiment Analyzer</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #f7f7f7;
-            margin: 0;
-            padding: 0;
-        }
-        .container {
-            max-width: 420px;
-            margin: 40px auto;
-            background: #fff;
-            border-radius: 10px;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-            padding: 32px 24px 24px 24px;
-        }
-        h1 {
-            text-align: center;
-            font-size: 1.6em;
-            margin-bottom: 18px;
-            color: #333;
-        }
-        label {
-            font-weight: 500;
-            display: block;
-            margin-bottom: 6px;
-            color: #444;
-        }
-        input[type="text"] {
-            width: 100%;
-            padding: 8px 10px;
-            margin-bottom: 16px;
-            border: 1px solid #ccc;
-            border-radius: 6px;
-            font-size: 1em;
-        }
-        button {
-            width: 100%;
-            background: #007bff;
-            color: #fff;
-            border: none;
-            border-radius: 6px;
-            padding: 12px 0;
-            font-size: 1.1em;
-            cursor: pointer;
-            transition: background 0.2s;
-            margin-bottom: 18px;
-        }
-        button:disabled {
-            background: #b3d1ff;
-            cursor: not-allowed;
-        }
-        .review-box {
-            background: #f2f2f2;
-            border-radius: 8px;
-            padding: 16px;
-            margin-bottom: 18px;
-            min-height: 60px;
-            font-size: 1.08em;
-            color: #222;
-            word-break: break-word;
-        }
-        .sentiment-result {
-            text-align: center;
-            font-size: 2.5em;
-            margin-bottom: 10px;
-        }
-        .sentiment-label {
-            text-align: center;
-            font-size: 1.1em;
-            color: #555;
-            margin-bottom: 8px;
-        }
-        .error-message {
-            color: #d8000c;
-            background: #ffd2d2;
-            border-radius: 6px;
-            padding: 10px;
-            margin-bottom: 12px;
-            text-align: center;
-            font-size: 1em;
-        }
-        .loading {
-            text-align: center;
-            color: #007bff;
-            font-size: 1.1em;
-            margin-bottom: 10px;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MVP Logger (GAS URL Input)</title>
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; margin: 2rem; }
+    .row { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
+    input[type="text"] { width: 420px; padding: 0.5rem; }
+    button { padding: 0.6rem 0.9rem; cursor: pointer; }
+    #status { margin-top: 0.75rem; min-height: 1.25rem; color: #0366d6; }
+    .hint { color: #666; font-size: 0.9rem; }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Random Review Sentiment Analyzer</h1>
-        <label for="token-input">Hugging Face API Token (optional):</label>
-        <input type="text" id="token-input" placeholder="Enter your API token (optional)">
-        <button id="analyze-btn" disabled>Analyze Random Review</button>
-        <div id="loading" class="loading" style="display:none;">Loading reviews...</div>
-        <div id="error" class="error-message" style="display:none;"></div>
-        <div id="review" class="review-box"></div>
-        <div id="sentiment" class="sentiment-result"></div>
-        <div id="sentiment-label" class="sentiment-label"></div>
-    </div>
-    <script src="app.js"></script>
+  <h1>MVP Event Logger</h1>
+
+  <div class="row">
+    <label for="gasUrl"><strong>Apps Script Web App URL</strong></label>
+    <input id="gasUrl" type="text" placeholder="https://script.google.com/macros/s/xxxxxxxx/exec" />
+    <button id="saveUrl">Save URL</button>
+  </div>
+  <div class="hint">Paste your deployed Web App URL ending with /exec, then click Save URL.</div>
+
+  <hr />
+
+  <div class="row">
+    <button id="ctaA">Add to Bag (A)</button>
+    <button id="ctaB">Add to Bag (B)</button>
+    <button id="heartbeat">Heartbeat (ping)</button>
+  </div>
+
+  <div id="status"></div>
+
+  <script src="app.js"></script>
 </body>
 </html>
