@@ -1,176 +1,120 @@
-const REVIEWS_TSV_URL = 'reviews_test.tsv';
+/**
+ * app.js — MVP Logger (CORS-safe)
+ *
+ * Purpose
+ * - Send cross-origin POSTs to a Google Apps Script Web App without CORS preflight.
+ * - Uses application/x-www-form-urlencoded via URLSearchParams (no custom headers).
+ *
+ * How it avoids preflight
+ * - No custom headers (e.g., no Content-Type: application/json).
+ * - Body encoded as form data; method is POST (simple request spec).
+ *
+ * Requirements
+ * - index.html contains:
+ *    - <input id="gasUrl"> and <button id="saveUrl">
+ *    - <button id="ctaA">, <button id="ctaB">, <button id="heartbeat">
+ *    - <div id="status">
+ * - Deploy Apps Script Web App as “Anyone” and use the /exec URL.
+ *
+ * Notes
+ * - For higher throughput, consider switching to Sheets API values.append server-side.
+ */
 
-const analyzeBtn = document.getElementById('analyze-btn');
-const tokenInput = document.getElementById('token-input');
-const reviewBox = document.getElementById('review');
-const sentimentDiv = document.getElementById('sentiment');
-const sentimentLabelDiv = document.getElementById('sentiment-label');
-const errorDiv = document.getElementById('error');
-const loadingDiv = document.getElementById('loading');
+const LS_KEY_URL = "gas_url";
+const LS_KEY_UID = "uid";
 
-let reviews = [];
-
-function showLoading(msg) {
-    loadingDiv.textContent = msg;
-    loadingDiv.style.display = 'block';
+/** Get or create a stable pseudo user id. */
+function getUserId() {
+  let uid = localStorage.getItem(LS_KEY_UID);
+  if (!uid) {
+    uid = (crypto?.randomUUID?.() || Math.random().toString(36).slice(2));
+    localStorage.setItem(LS_KEY_UID, uid);
+  }
+  return uid;
 }
 
-function hideLoading() {
-    loadingDiv.style.display = 'none';
+/** Read the GAS URL from input or storage; hydrate input if stored. */
+function getGasUrl() {
+  const input = document.getElementById("gasUrl");
+  const entered = (input?.value || "").trim();
+  if (entered) return entered;
+  const saved = (localStorage.getItem(LS_KEY_URL) || "").trim();
+  if (input && saved) input.value = saved;
+  return saved;
 }
 
-function showError(msg) {
-    errorDiv.textContent = msg;
-    errorDiv.style.display = 'block';
+/** Save the GAS URL from input after basic validation. */
+function saveGasUrl() {
+  const status = document.getElementById("status");
+  const url = (document.getElementById("gasUrl")?.value || "").trim();
+  if (!url) {
+    status.textContent = "Please paste your Apps Script Web App URL (ending with /exec).";
+    return;
+  }
+  try { new URL(url); } catch { status.textContent = "Invalid URL format."; return; }
+  localStorage.setItem(LS_KEY_URL, url);
+  status.textContent = "Saved Web App URL.";
 }
 
-function hideError() {
-    errorDiv.style.display = 'none';
-}
+/**
+ * Send one event as a CORS simple request (no preflight).
+ * Payload fields are flattened into form data.
+ * Returns a Promise resolving to raw response text.
+ */
+async function sendLogSimple(payload) {
+  const status = document.getElementById("status");
+  const url = getGasUrl();
+  if (!url) {
+    status.textContent = "Missing Web App URL. Paste it and click Save URL first.";
+    return "MISSING_URL";
+  }
 
-function clearSentiment() {
-    sentimentDiv.innerHTML = '';
-    sentimentLabelDiv.textContent = '';
-}
+  const form = new URLSearchParams();
+  form.set("event", payload.event || "");
+  form.set("variant", payload.variant || "");
+  form.set("userId", payload.userId || "");
+  form.set("ts", String(payload.ts || Date.now()));
+  form.set("meta", JSON.stringify(payload.meta || {}));
 
-function clearReview() {
-    reviewBox.textContent = '';
-}
-
-function setSentiment(type) {
-    if (type === 'positive') {
-        sentimentDiv.innerHTML = '<i class="fa-solid fa-thumbs-up" style="color:#28a745"></i>';
-        sentimentLabelDiv.textContent = 'Positive';
-    } else if (type === 'negative') {
-        sentimentDiv.innerHTML = '<i class="fa-solid fa-thumbs-down" style="color:#dc3545"></i>';
-        sentimentLabelDiv.textContent = 'Negative';
-    } else {
-        sentimentDiv.innerHTML = '<i class="fa-solid fa-question" style="color:#ffc107"></i>';
-        sentimentLabelDiv.textContent = 'Neutral';
-    }
-}
-
-function enableButton() {
-    analyzeBtn.disabled = false;
-}
-
-function disableButton() {
-    analyzeBtn.disabled = true;
-}
-
-function fetchReviews() {
-    showLoading('Loading reviews...');
-    fetch(REVIEWS_TSV_URL)
-        .then(response => {
-            if (!response.ok) throw new Error('Failed to fetch reviews_test.tsv');
-            return response.text();
-        })
-        .then(tsvText => {
-            Papa.parse(tsvText, {
-                header: true,
-                delimiter: '\t',
-                skipEmptyLines: true,
-                complete: function(results) {
-                    if (!results.data || !Array.isArray(results.data)) {
-                        throw new Error('TSV parsing failed.');
-                    }
-                    reviews = results.data
-                        .map(row => row['text'])
-                        .filter(text => typeof text === 'string' && text.trim().length > 0);
-                    if (reviews.length === 0) {
-                        throw new Error('No reviews found in TSV.');
-                    }
-                    hideLoading();
-                    enableButton();
-                },
-                error: function(err) {
-                    hideLoading();
-                    showError('Error parsing TSV: ' + err.message);
-                }
-            });
-        })
-        .catch(err => {
-            hideLoading();
-            showError('Error loading reviews: ' + err.message);
-        });
-}
-
-function getRandomReview() {
-    if (reviews.length === 0) return null;
-    const idx = Math.floor(Math.random() * reviews.length);
-    return reviews[idx];
-}
-function analyzeSentiment(reviewText, token) {
-    clearSentiment();
-    sentimentLabelDiv.textContent = '';
-    sentimentDiv.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="color:#007bff"></i>';
-    const url = 'https://api-inference.huggingface.co/models/siebert/sentiment-roberta-large-english';
-    const headers = {
-        'Content-Type': 'application/json'
-    };
-    if (token && token.trim().length > 0) {
-        headers['Authorization'] = 'Bearer ' + token.trim();
-    }
-    fetch(url, {
-        method: 'POST',
-        headers: headers,
-        body: JSON.stringify({ inputs: reviewText })
-    })
-    .then(async response => {
-        if (!response.ok) {
-            let errMsg = 'API error: ' + response.status;
-            try {
-                const errJson = await response.json();
-                if (errJson && errJson.error) {
-                    errMsg = errJson.error;
-                }
-            } catch {}
-            throw new Error(errMsg);
-        }
-        return response.json();
-    })
-    .then(data => {
-        if (!Array.isArray(data)  !Array.isArray(data[0])  typeof data[0][0] !== 'object') {
-            setSentiment('neutral');
-            sentimentLabelDiv.textContent = 'Could not parse API response';
-            return;
-        }
-        const result = data[0][0];
-        const label = result.label;
-        const score = result.score;
-        if (label === 'POSITIVE' && score > 0.5) {
-            setSentiment('positive');
-        } else if (label === 'NEGATIVE' && score > 0.5) {
-            setSentiment('negative');
-        } else {
-            setSentiment('neutral');
-        }
-    })
-    .catch(err => {
-        setSentiment('neutral');
-        sentimentLabelDiv.textContent = '';
-        showError('Sentiment analysis failed: ' + err.message);
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      body: form // application/x-www-form-urlencoded; no headers to avoid preflight
     });
+    const text = await res.text();
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${text}`);
+    status.textContent = "Logged ✅";
+    return text;
+  } catch (err) {
+    status.textContent = `Log failed: ${String(err)}`;
+    return `ERROR: ${String(err)}`;
+  }
 }
 
-analyzeBtn.addEventListener('click', function() {
-    hideError();
-    clearSentiment();
-    clearReview();
-    if (reviews.length === 0) {
-        showError('No reviews loaded.');
-        return;
-    }
-    const reviewText = getRandomReview();
-    if (!reviewText) {
-        showError('Could not select a review.');
-        return;
-    }
-    reviewBox.textContent = reviewText;
-    const token = tokenInput.value;
-    analyzeSentiment(reviewText, token);
-});
+/** Wire UI interactions. */
+(function init() {
+  const status = document.getElementById("status");
+  const saved = localStorage.getItem(LS_KEY_URL);
+  if (saved) {
+    const input = document.getElementById("gasUrl");
+    if (input) input.value = saved;
+    status.textContent = "Loaded saved Web App URL.";
+  }
 
-window.addEventListener('DOMContentLoaded', function() {
-    fetchReviews();
-});
+  document.getElementById("saveUrl")?.addEventListener("click", saveGasUrl);
+
+  const userId = getUserId();
+  const baseMeta = { page: location.pathname, ua: navigator.userAgent };
+
+  document.getElementById("ctaA")?.addEventListener("click", () => {
+    sendLogSimple({ event: "cta_click", variant: "A", userId, ts: Date.now(), meta: baseMeta });
+  });
+
+  document.getElementById("ctaB")?.addEventListener("click", () => {
+    sendLogSimple({ event: "cta_click", variant: "B", userId, ts: Date.now(), meta: baseMeta });
+  });
+
+  document.getElementById("heartbeat")?.addEventListener("click", () => {
+    sendLogSimple({ event: "heartbeat", userId, ts: Date.now(), meta: baseMeta });
+  });
+})();
